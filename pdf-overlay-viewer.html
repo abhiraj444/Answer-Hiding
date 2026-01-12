@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Answer Hider - Overlay Mode</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        /* Header & Controls */
+        .toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .home-link {
+            font-size: 1.2rem;
+            text-decoration: none;
+            margin-right: 0.25rem;
+        }
+
+        .toolbar h1 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn {
+            padding: 0.4rem 0.75rem;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-success {
+            background: #22c55e;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, #ec4899, #8b5cf6);
+            color: white;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
+        }
+
+        .page-nav {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-left: auto;
+        }
+
+        .page-info {
+            font-size: 0.8rem;
+            color: #a0a0a0;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding-top: 55px;
+            min-height: 100vh;
+        }
+
+        /* Upload Screen */
+        .upload-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 55px);
+            padding: 1.5rem;
+        }
+
+        .upload-zone {
+            width: 100%;
+            max-width: 400px;
+            padding: 3rem 1.5rem;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .upload-zone:hover,
+        .upload-zone.drag-over {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .upload-zone .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .upload-zone h2 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-zone p {
+            color: #808080;
+            font-size: 0.85rem;
+        }
+
+        /* PDF Viewer */
+        .pdf-viewer {
+            display: none;
+            padding: 0.75rem;
+            padding-bottom: 3rem;
+        }
+
+        .page-container {
+            position: relative;
+            margin: 0 auto 1.5rem;
+            background: white;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+            border-radius: 4px;
+            overflow: visible;
+        }
+
+        .page-container canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        /* Answer overlay with text */
+        .answer-overlay {
+            position: absolute;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            white-space: nowrap;
+            min-height: 18px;
+        }
+
+        .answer-overlay:hover {
+            transform: scale(1.02);
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.5);
+        }
+
+        .answer-overlay.revealed {
+            background: transparent;
+            border: 2px solid #22c55e;
+            color: transparent;
+        }
+
+        .instructions {
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin: 0 auto 1rem;
+            max-width: 700px;
+            font-size: 0.8rem;
+            color: #b0b0b0;
+        }
+
+        .instructions strong {
+            color: #667eea;
+        }
+
+        /* Status bar */
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0.4rem 1rem;
+            font-size: 0.75rem;
+            color: #808080;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+        }
+
+        .status-bar .stat {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .status-bar .stat-value {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading-overlay p {
+            margin-top: 1rem;
+            color: #e0e0e0;
+            font-size: 0.9rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (min-width: 768px) {
+            .toolbar {
+                padding: 0.75rem 1.5rem;
+                gap: 1rem;
+            }
+
+            .toolbar h1 {
+                font-size: 1.1rem;
+            }
+
+            .btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.85rem;
+            }
+
+            .main-content {
+                padding-top: 60px;
+            }
+
+            .pdf-viewer {
+                padding: 1.5rem;
+                padding-bottom: 4rem;
+            }
+
+            .answer-overlay {
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="toolbar">
+        <a href="index.html" class="home-link">🏠</a>
+        <h1>📝 Gagan Pratap PYQ</h1>
+        <div class="toolbar-divider"></div>
+
+        <button class="btn btn-primary" id="uploadBtn">📁 Load PDF</button>
+
+        <button class="btn btn-success hidden" id="showAllBtn">👁️ Show</button>
+        <button class="btn btn-warning hidden" id="hideAllBtn">🙈 Hide</button>
+        <button class="btn btn-download hidden" id="downloadBtn">📥 Download</button>
+
+        <div class="page-nav hidden" id="pageNav">
+            <button class="btn btn-secondary" id="prevPage">◀</button>
+            <span class="page-info">
+                <span id="currentPage">1</span>/<span id="totalPages">1</span>
+            </span>
+            <button class="btn btn-secondary" id="nextPage">▶</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="upload-screen" id="uploadScreen">
+            <div class="upload-zone" id="uploadZone">
+                <div class="icon">📝</div>
+                <h2>Drop PDF here</h2>
+                <p>For "Correct Ans: X" format PDFs</p>
+            </div>
+            <input type="file" id="fileInput" accept=".pdf" hidden>
+        </div>
+
+        <div class="pdf-viewer" id="pdfViewer">
+            <div class="instructions">
+                <strong>Tip:</strong> Click "Tap to reveal" boxes to see answers. Download creates a PDF with answers
+                hidden.
+            </div>
+            <div id="pagesContainer"></div>
+        </div>
+    </div>
+
+    <div class="status-bar hidden" id="statusBar">
+        <div class="stat">
+            <span>Found:</span>
+            <span class="stat-value" id="answerCount">0</span>
+        </div>
+        <div class="stat">
+            <span>Revealed:</span>
+            <span class="stat-value" id="revealedCount">0</span>
+        </div>
+    </div>
+
+    <div class="loading-overlay hidden" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p id="loadingText">Loading PDF...</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // State
+        let pdfDoc = null;
+        let originalPdfArrayBuffer = null;
+        let scale = 1.5;
+        let overlays = [];
+        let answerPositions = [];
+        let revealedSet = new Set();
+        let processedPages = new Set();
+
+        // DOM elements
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadScreen = document.getElementById('uploadScreen');
+        const pdfViewer = document.getElementById('pdfViewer');
+        const pagesContainer = document.getElementById('pagesContainer');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const showAllBtn = document.getElementById('showAllBtn');
+        const hideAllBtn = document.getElementById('hideAllBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const pageNav = document.getElementById('pageNav');
+        const prevPageBtn = document.getElementById('prevPage');
+        const nextPageBtn = document.getElementById('nextPage');
+        const currentPageSpan = document.getElementById('currentPage');
+        const totalPagesSpan = document.getElementById('totalPages');
+        const statusBar = document.getElementById('statusBar');
+        const answerCountSpan = document.getElementById('answerCount');
+        const revealedCountSpan = document.getElementById('revealedCount');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+
+        // Events
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', e => e.target.files[0] && loadPDF(e.target.files[0]));
+
+        uploadZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            uploadZone.classList.add('drag-over');
+        });
+        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+        uploadZone.addEventListener('drop', e => {
+            e.preventDefault();
+            uploadZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file?.type === 'application/pdf') loadPDF(file);
+        });
+
+        showAllBtn.addEventListener('click', () => toggleAllOverlays(true));
+        hideAllBtn.addEventListener('click', () => toggleAllOverlays(false));
+        downloadBtn.addEventListener('click', downloadPDF);
+
+        // Load PDF - shows pages INSTANTLY with progressive loading
+        async function loadPDF(file) {
+            loadingOverlay.classList.remove('hidden');
+            loadingText.textContent = 'Loading PDF...';
+
+            try {
+                originalPdfArrayBuffer = await file.arrayBuffer();
+                pdfDoc = await pdfjsLib.getDocument({ data: originalPdfArrayBuffer.slice(0) }).promise;
+
+                // Update UI immediately
+                uploadScreen.classList.add('hidden');
+                pdfViewer.style.display = 'block';
+                showAllBtn.classList.remove('hidden');
+                hideAllBtn.classList.remove('hidden');
+                downloadBtn.classList.remove('hidden');
+                pageNav.classList.remove('hidden');
+                statusBar.classList.remove('hidden');
+                totalPagesSpan.textContent = pdfDoc.numPages;
+
+                // Reset state
+                pagesContainer.innerHTML = '';
+                overlays = [];
+                answerPositions = [];
+                revealedSet.clear();
+                processedPages.clear();
+
+                // Create placeholder containers for ALL pages immediately
+                for (let i = 1; i <= pdfDoc.numPages; i++) {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'page-container';
+                    placeholder.id = `page-${i}`;
+                    placeholder.style.minHeight = '400px';
+                    placeholder.style.display = 'flex';
+                    placeholder.style.alignItems = 'center';
+                    placeholder.style.justifyContent = 'center';
+                    placeholder.style.color = '#999';
+                    placeholder.textContent = `Page ${i}`;
+                    pagesContainer.appendChild(placeholder);
+                }
+
+                loadingOverlay.classList.add('hidden');
+
+                // Start processing visible pages + nearby
+                processVisiblePages();
+
+                // Continue processing in background
+                processRemainingPages();
+
+            } catch (error) {
+                console.error('Error loading PDF:', error);
+                loadingOverlay.classList.add('hidden');
+                alert('Error loading PDF: ' + error.message);
+            }
+        }
+
+        // Process pages that are visible or near viewport
+        function processVisiblePages() {
+            const viewportHeight = window.innerHeight;
+            const buffer = viewportHeight; // Process pages within 1 viewport above/below
+
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+                const el = document.getElementById(`page-${i}`);
+                if (el && !processedPages.has(i)) {
+                    const rect = el.getBoundingClientRect();
+                    // Check if page is in or near viewport
+                    if (rect.bottom > -buffer && rect.top < viewportHeight + buffer) {
+                        processPage(i);
+                    }
+                }
+            }
+        }
+
+        // Process remaining pages in background
+        async function processRemainingPages() {
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+                if (!processedPages.has(i)) {
+                    await processPage(i);
+                    // Small delay to keep UI responsive
+                    await new Promise(r => setTimeout(r, 10));
+                }
+            }
+        }
+
+        // Process a single page
+        async function processPage(pageNum) {
+            if (processedPages.has(pageNum)) return;
+            processedPages.add(pageNum);
+
+            const page = await pdfDoc.getPage(pageNum);
+            const viewport = page.getViewport({ scale });
+
+            const container = document.getElementById(`page-${pageNum}`);
+            container.textContent = ''; // Clear placeholder
+            container.style.minHeight = '';
+            container.style.display = '';
+            container.style.width = viewport.width + 'px';
+            container.style.maxWidth = '100%';
+
+            // Create canvas
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            // Render PDF page
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            container.appendChild(canvas);
+
+            // Get text content and find answers
+            const textContent = await page.getTextContent();
+            findAnswers(textContent, container, pageNum, viewport);
+
+            answerCountSpan.textContent = overlays.length;
+        }
+
+        function findAnswers(textContent, container, pageNum, viewport) {
+            const items = textContent.items;
+            let combinedText = '';
+            let textPositions = [];
+
+            for (const item of items) {
+                const start = combinedText.length;
+                combinedText += item.str;
+                textPositions.push({
+                    start,
+                    end: combinedText.length,
+                    item
+                });
+            }
+
+            // Find answer patterns
+            const answerPatterns = [
+                /Correct\s*Ans\s*:\s*([A-D])/gi,
+                /Correct\s*Answer\s*:\s*([A-D])/gi,
+                /Answer\s*:\s*([A-D])/gi
+            ];
+
+            for (const pattern of answerPatterns) {
+                let match;
+                while ((match = pattern.exec(combinedText)) !== null) {
+                    const matchStart = match.index;
+                    const matchEnd = matchStart + match[0].length;
+
+                    const relevantItems = textPositions.filter(
+                        p => p.end > matchStart && p.start < matchEnd
+                    );
+
+                    if (relevantItems.length > 0) {
+                        let minX = Infinity, minY = Infinity;
+                        let maxX = -Infinity, maxY = -Infinity;
+
+                        for (const { item } of relevantItems) {
+                            const tx = item.transform;
+                            const [scaleX, , , scaleY, x, y] = tx;
+                            const w = item.width || (item.str.length * Math.abs(scaleX) * 0.6);
+                            const h = Math.abs(scaleY) || 12;
+
+                            minX = Math.min(minX, x);
+                            minY = Math.min(minY, y);
+                            maxX = Math.max(maxX, x + w);
+                            maxY = Math.max(maxY, y + h);
+                        }
+
+                        // Use PERCENTAGE positions for responsive scaling
+                        const xPercent = (minX * scale / viewport.width) * 100;
+                        const yPercent = ((viewport.height - maxY * scale) / viewport.height) * 100;
+                        const wPercent = ((maxX - minX) * scale / viewport.width) * 100;
+                        const hPercent = ((maxY - minY) * scale / viewport.height) * 100;
+
+                        createOverlay(container, {
+                            xPercent, yPercent, wPercent, hPercent,
+                            pdfX: minX,
+                            pdfY: minY,
+                            pdfW: maxX - minX,
+                            pdfH: maxY - minY,
+                            pageNum
+                        });
+
+                        answerPositions.push({
+                            pageNum,
+                            x: minX,
+                            y: minY,
+                            width: maxX - minX,
+                            height: maxY - minY
+                        });
+                    }
+                }
+            }
+        }
+
+        function createOverlay(container, pos) {
+            const overlay = document.createElement('div');
+            overlay.className = 'answer-overlay';
+
+            // Use percentage-based positioning for responsive scaling
+            overlay.style.left = pos.xPercent + '%';
+            overlay.style.top = pos.yPercent + '%';
+            overlay.style.width = pos.wPercent + '%';
+            overlay.style.height = pos.hPercent + '%';
+
+            overlay.textContent = 'Tap to reveal';
+            overlay.dataset.index = overlays.length;
+
+            overlay.addEventListener('click', e => {
+                e.stopPropagation();
+                toggleOverlay(overlay);
+            });
+
+            container.appendChild(overlay);
+            overlays.push(overlay);
+        }
+
+        function toggleOverlay(overlay) {
+            const index = overlay.dataset.index;
+
+            if (overlay.classList.contains('revealed')) {
+                overlay.classList.remove('revealed');
+                overlay.textContent = 'Tap to reveal';
+                revealedSet.delete(index);
+            } else {
+                overlay.classList.add('revealed');
+                overlay.textContent = '';
+                revealedSet.add(index);
+            }
+
+            updateRevealedCount();
+        }
+
+        function toggleAllOverlays(reveal) {
+            overlays.forEach((overlay, idx) => {
+                if (reveal) {
+                    overlay.classList.add('revealed');
+                    overlay.textContent = '';
+                    revealedSet.add(String(idx));
+                } else {
+                    overlay.classList.remove('revealed');
+                    overlay.textContent = 'Tap to reveal';
+                    revealedSet.delete(String(idx));
+                }
+            });
+            updateRevealedCount();
+        }
+
+        function updateRevealedCount() {
+            revealedCountSpan.textContent = revealedSet.size;
+        }
+
+        async function downloadPDF() {
+            if (!originalPdfArrayBuffer) {
+                alert('No PDF loaded!');
+                return;
+            }
+
+            loadingOverlay.classList.remove('hidden');
+            loadingText.textContent = 'Generating PDF...';
+
+            try {
+                const { PDFDocument, rgb } = PDFLib;
+                const pdfDocLib = await PDFDocument.load(originalPdfArrayBuffer);
+                const pages = pdfDocLib.getPages();
+
+                for (const pos of answerPositions) {
+                    const page = pages[pos.pageNum - 1];
+                    const padding = 2;
+                    page.drawRectangle({
+                        x: pos.x - padding,
+                        y: pos.y - padding,
+                        width: pos.width + padding * 2,
+                        height: pos.height + padding * 2,
+                        color: rgb(1, 1, 1)
+                    });
+                }
+
+                const pdfBytes = await pdfDocLib.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'gaganpratap_answers_hidden.pdf';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                loadingOverlay.classList.add('hidden');
+
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                loadingOverlay.classList.add('hidden');
+                alert('Error generating PDF: ' + error.message);
+            }
+        }
+
+        // Page navigation
+        prevPageBtn.addEventListener('click', () => scrollToPage(-1));
+        nextPageBtn.addEventListener('click', () => scrollToPage(1));
+
+        function scrollToPage(delta) {
+            const currentPage = parseInt(currentPageSpan.textContent);
+            const newPage = Math.max(1, Math.min(pdfDoc.numPages, currentPage + delta));
+            const pageEl = document.getElementById(`page-${newPage}`);
+            if (pageEl) {
+                pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                currentPageSpan.textContent = newPage;
+            }
+        }
+
+        // Handle scroll - update current page & process visible pages
+        window.addEventListener('scroll', () => {
+            if (!pdfDoc) return;
+
+            // Update page number
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+                const pageEl = document.getElementById(`page-${i}`);
+                if (pageEl) {
+                    const rect = pageEl.getBoundingClientRect();
+                    if (rect.top <= 100 && rect.bottom > 100) {
+                        currentPageSpan.textContent = i;
+                        break;
+                    }
+                }
+            }
+
+            // Process visible pages on scroll
+            processVisiblePages();
+        });
+    </script>
+</body>
+
+</html>
