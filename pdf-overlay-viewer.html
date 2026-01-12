@@ -375,7 +375,7 @@
 
         <div class="pdf-viewer" id="pdfViewer">
             <div class="instructions">
-                <strong>Tip:</strong> Click "Tap to reveal" boxes to see answers. Download creates a PDF with answers
+                <strong>Tip:</strong> Click "" boxes to see answers. Download creates a PDF with answers
                 hidden.
             </div>
             <div id="pagesContainer"></div>
@@ -654,7 +654,7 @@
             overlay.style.width = pos.wPercent + '%';
             overlay.style.height = pos.hPercent + '%';
 
-            overlay.textContent = 'Tap to reveal';
+            overlay.textContent = '🔒';
             overlay.dataset.index = overlays.length;
 
             overlay.addEventListener('click', e => {
@@ -671,7 +671,7 @@
 
             if (overlay.classList.contains('revealed')) {
                 overlay.classList.remove('revealed');
-                overlay.textContent = 'Tap to reveal';
+                overlay.textContent = '🔒';
                 revealedSet.delete(index);
             } else {
                 overlay.classList.add('revealed');
@@ -690,7 +690,7 @@
                     revealedSet.add(String(idx));
                 } else {
                     overlay.classList.remove('revealed');
-                    overlay.textContent = 'Tap to reveal';
+                    overlay.textContent = '';
                     revealedSet.delete(String(idx));
                 }
             });
