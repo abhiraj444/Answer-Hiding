@@ -348,9 +348,10 @@
         <button class="btn btn-warning hidden" id="hideAllBtn">🙈 Hide</button>
         <button class="btn btn-download hidden" id="downloadBtn">📥 Download</button>
 
-        <label class="hidden" id="ocrToggle" style="display: flex; align-items: center; gap: 5px; font-size: 0.75rem; color: #b0b0b0; margin-left: 10px;">
+        <label class="hidden" id="ocrToggle"
+            style="display: flex; align-items: center; gap: 5px; font-size: 0.75rem; color: #b0b0b0; margin-left: 10px;">
             <input type="checkbox" id="enableOcr" style="width: 14px; height: 14px; cursor: pointer;">
-            <span>Hide Chosen Option (OCR)</span>
+            <span>Hide Status (OCR)</span>
         </label>
 
         <div class="page-nav hidden" id="pageNav">
@@ -588,16 +589,16 @@
             // Also detect "Chosen Option:" text to hide
             // Only run OCR if checkbox is enabled
             const enableOcrCheckbox = document.getElementById('enableOcr');
-            let chosenOptionSymbols = [];
+            let statusSymbols = [];
             if (enableOcrCheckbox && enableOcrCheckbox.checked) {
-                chosenOptionSymbols = await detectChosenOptionText(page, viewport, pageNum, viewport.width, viewport.height, colorCanvas);
+                statusSymbols = await detectStatusText(page, viewport, pageNum, viewport.width, viewport.height, colorCanvas);
             }
 
             // Create overlays with PERCENTAGE positioning
             symbols.forEach(sym => createOverlay(container, sym, viewport));
 
             // Create overlays for Chosen Option values
-            chosenOptionSymbols.forEach(sym => createOverlay(container, sym, viewport));
+            statusSymbols.forEach(sym => createOverlay(container, sym, viewport));
 
             symbolCountSpan.textContent = overlays.length;
         }
@@ -704,76 +705,113 @@
             });
         }
 
-        // Detect "Chosen Option:" text and create overlays to hide the value
-        // Detect "Chosen Option:" text using OCR and create overlays
-        async function detectChosenOptionText(page, viewport, pageNum, width, height, canvas) {
-            const chosenOptionOverlays = [];
-
-            // First try PDF text layer (for text-based PDFs)
+        async function detectStatusText(page, viewport, pageNum, width, height, canvas) {
+            const statusOverlays = [];
+            /*// First try PDF text layer (for text-based PDFs)
             try {
                 const textContent = await page.getTextContent();
-                for (const item of textContent.items) {
-                    if (item.str && item.str.includes("Chosen Option")) {
-                        const colonIdx = item.str.indexOf(":");
-                        if (colonIdx !== -1) {
-                            const tx = item.transform;
-
-                            const textWidth = item.width * scale;  // real width of "Chosen Option :"
-                            const boxWidth = 22;
-                            const boxHeight = 22;
-
-                            const boxX = (tx[4] * scale) + textWidth + 2;
-                            const boxY = viewport.height - (tx[5] * scale) - boxHeight + 5;
-
-                            chosenOptionOverlays.push({
-                                x: boxX, y: boxY, width: boxWidth, height: boxHeight,
-                                xPercent: (boxX / width) * 100,
-                                yPercent: (boxY / height) * 100,
-                                wPercent: (boxWidth / width) * 100,
-                                hPercent: (boxHeight / height) * 100,
-                                pageNum, isChosenOption: true
-                            });
+                // Look for "Status" text
+                for (let i = 0; i < textContent.items.length; i++) {
+                    const item = textContent.items[i];
+                    // Case insensitive search for "Status"
+                    if (item.str && item.str.toLowerCase().includes("status")) {
+                        const tx = item.transform;
+                        // Calculate box to cover "Status" text only (not the colon or value)
+                        let textWidth = item.width * scale;
+                        // If text includes colon and value, calculate width up to "Status" only
+                        const colonIndex = item.str.indexOf(":");
+                        if (colonIndex !== -1) {
+                            const textBeforeColon = item.str.substring(0, colonIndex).trim();
+                            textWidth = (textBeforeColon.length / item.str.length) * (item.width * scale);
                         }
+                        const textHeight = item.height * scale;
+                        const boxX = tx[4] * scale;  // Start of text
+                        const boxY = viewport.height - (tx[5] * scale) - textHeight - 2;
+                        const boxWidth = textWidth + 5;  // Slight padding
+                        const boxHeight = textHeight + 6;
+                        console.log(`[Page ${pageNum}] Found "Status" in text layer:`, {
+                            text: item.str,
+                            boxX, boxY, boxWidth, boxHeight
+                        });
+                        statusOverlays.push({
+                            x: boxX, y: boxY, width: boxWidth, height: boxHeight,
+                            xPercent: (boxX / width) * 100,
+                            yPercent: (boxY / height) * 100,
+                            wPercent: (boxWidth / width) * 100,
+                            hPercent: (boxHeight / height) * 100,
+                            pageNum, isStatusText: true
+                        });
                     }
                 }
-                if (chosenOptionOverlays.length > 0) return chosenOptionOverlays;
-            } catch (e) { console.log("Text layer not available, using OCR"); }
-
+                if (statusOverlays.length > 0) {
+                    console.log(`[Page ${pageNum}] Found ${statusOverlays.length} "Status" texts`);
+                    return statusOverlays;
+                }
+            } catch (e) {
+                console.log(`[Page ${pageNum}] Text layer error:`, e);
+            }*/
             // For image-based PDFs, use OCR (if Tesseract loaded)
             if (typeof Tesseract !== "undefined" && canvas) {
                 try {
                     const result = await Tesseract.recognize(canvas, "eng", {
                         logger: m => { if (m.status === "recognizing text") loadingText.textContent = `OCR Page ${pageNum}: ${Math.round(m.progress * 100)}%`; }
                     });
-
-                    // Find "Chosen Option" text in OCR results
+                    // Find "Status" text in OCR results
                     for (const line of result.data.lines || []) {
-                        if (line.text.toLowerCase().includes("chosen option")) {
-                            // Find the value after colon
-                            const match = line.text.match(/chosen\s*option\s*:\s*(\d+|--|-)/i);
-                            if (match) {
-                                // Get bounding box from OCR
-                                const bbox = line.bbox;
-                                const boxWidth = 50;  // Fixed width
-                                const boxHeight = 25;  // Fixed height
-                                const boxX = bbox.x1 - boxWidth - 5;  // Position at end of line
-                                const boxY = bbox.y0 - 2;
+                        if (line.text.toLowerCase().includes("status")) {
+                            const words = line.words || [];
+                            let statusWord = null;
+                            for (let i = 0; i < words.length; i++) {
+                                const wordText = words[i].text.toLowerCase();
+                                if (wordText.includes("status")) {
+                                    statusWord = words[i];
+                                    break;
+                                }
+                            }
+                            if (statusWord) {
+                                const boxX = statusWord.bbox.x0;
+                                const boxY = statusWord.bbox.y0;
+                                const boxWidth = statusWord.bbox.x1 - statusWord.bbox.x0;
+                                const boxHeight = statusWord.bbox.y1 - statusWord.bbox.y0;
+                                console.log(`[Page ${pageNum}] Found "Status" via OCR:`, {
+                                    text: statusWord.text,
+                                    boxX, boxY, boxWidth, boxHeight
+                                });
+                                // statusOverlays.push({
+                                //     x: boxX, y: boxY, width: boxWidth, height: boxHeight,
+                                //     xPercent: (boxX / width) * 100,
+                                //     yPercent: (boxY / height) * 100,
+                                //     wPercent: (boxWidth / width) * 100,
+                                //     hPercent: (boxHeight / height) * 100,
+                                //     pageNum, isStatusText: true
+                                // });
+                                // ====== ADD THIS NEW CODE HERE ======
+                                // Calculate "Chosen Option" position relative to "Status"
+                                const lineGap = boxHeight + 4;  // Gap between Status and Chosen Option
+                                const chosenOptionY = boxY + lineGap;  // One line below Status
+                                const chosenOptionX = boxX + 42;  // Same X position (left-aligned)
+                                const chosenOptionWidth = boxWidth;  // Wider box for "Chosen Option"
+                                const chosenOptionHeight = boxHeight * 2;  // Same height
 
-                                chosenOptionOverlays.push({
-                                    x: boxX, y: boxY, width: boxWidth, height: boxHeight,
-                                    xPercent: (boxX / width) * 100,
-                                    yPercent: (boxY / height) * 100,
-                                    wPercent: (boxWidth / width) * 100,
-                                    hPercent: (boxHeight / height) * 100,
-                                    pageNum, isChosenOption: true
+                                console.log(`[Page ${pageNum}] Adding "Chosen Option" box relative to Status:`, {
+                                    chosenOptionX, chosenOptionY, chosenOptionWidth, chosenOptionHeight
+                                });
+
+                                statusOverlays.push({
+                                    x: chosenOptionX, y: chosenOptionY,
+                                    width: chosenOptionWidth, height: chosenOptionHeight,
+                                    xPercent: (chosenOptionX / width) * 100,
+                                    yPercent: (chosenOptionY / height) * 100,
+                                    wPercent: (chosenOptionWidth / width) * 100,
+                                    hPercent: (chosenOptionHeight / height) * 100,
+                                    pageNum, isStatusText: true  // Mark as Status-related
                                 });
                             }
                         }
                     }
                 } catch (e) { console.error("OCR error:", e); }
             }
-
-            return chosenOptionOverlays;
+            return statusOverlays;
         }
 
         function findBlobs(mask, width, height) {
