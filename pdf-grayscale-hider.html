@@ -586,21 +586,21 @@
             grayCtx.putImageData(imageData, 0, 0);
             container.appendChild(grayCanvas);
 
-            // Also detect "Chosen Option:" text to hide
-            // Only run OCR if checkbox is enabled
-            const enableOcrCheckbox = document.getElementById('enableOcr');
-            let statusSymbols = [];
-            if (enableOcrCheckbox && enableOcrCheckbox.checked) {
-                statusSymbols = await detectStatusText(page, viewport, pageNum, viewport.width, viewport.height, colorCanvas);
-            }
-
-            // Create overlays with PERCENTAGE positioning
+            // Create tick/cross overlays IMMEDIATELY (FAST - no waiting!)
             symbols.forEach(sym => createOverlay(container, sym, viewport));
-
-            // Create overlays for Chosen Option values
-            statusSymbols.forEach(sym => createOverlay(container, sym, viewport));
-
             symbolCountSpan.textContent = overlays.length;
+            // Run OCR in background (SLOW - doesn't block page)
+            const enableOcrCheckbox = document.getElementById('enableOcr');
+            if (enableOcrCheckbox && enableOcrCheckbox.checked) {
+                // REMOVED 'await' - runs async in background
+                detectStatusText(page, viewport, pageNum, viewport.width, viewport.height, colorCanvas)
+                    .then(statusSymbols => {
+                        // Add Chosen Option boxes when OCR finishes
+                        statusSymbols.forEach(sym => createOverlay(container, sym, viewport));
+                        symbolCountSpan.textContent = overlays.length;
+                    })
+                    .catch(err => console.error(`OCR failed for page ${pageNum}:`, err));
+            }
         }
 
         function detectColoredSymbols(canvas, pageNum, viewport) {
