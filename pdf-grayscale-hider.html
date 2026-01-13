@@ -439,7 +439,10 @@
 
         // Events
         uploadZone.addEventListener('click', () => fileInput.click());
-        uploadBtn.addEventListener('click', () => fileInput.click());
+        uploadBtn.addEventListener('click', () => {
+            fileInput.value = '';  // Reset so same file can be reloaded
+            fileInput.click();
+        });
         fileInput.addEventListener('change', e => e.target.files[0] && loadPDF(e.target.files[0]));
 
         uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
