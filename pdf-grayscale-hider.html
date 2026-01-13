@@ -1002,23 +1002,28 @@
                     loadingText.textContent = `Saving ${pageNum}/${pdfDoc.numPages}...`;
 
                     const container = document.getElementById(`page-${pageNum}`);
-                    const canvas = container.querySelector('canvas');
-                    const ctx = canvas.getContext('2d');
+                    const originalCanvas = container.querySelector('canvas');
+                    // Create TEMPORARY copy (don't touch original!)
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = originalCanvas.width;
+                    tempCanvas.height = originalCanvas.height;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    // Copy original to temp
+                    tempCtx.drawImage(originalCanvas, 0, 0);
+                    // Draw white boxes on TEMP canvas only
                     const pageSymbols = symbolPositions.filter(s => s.pageNum === pageNum);
-
-                    // Draw white boxes on canvas
-                    ctx.fillStyle = 'white';
+                    tempCtx.fillStyle = 'white';
                     pageSymbols.forEach(sym => {
                         const padding = 3;
-                        ctx.fillRect(
+                        tempCtx.fillRect(
                             sym.x * scale - padding,
-                            canvas.height - (sym.y + sym.height) * scale - padding,
+                            tempCanvas.height - (sym.y + sym.height) * scale - padding,
                             sym.width * scale + padding * 2,
                             sym.height * scale + padding * 2
                         );
                     });
-
-                    const imageData = canvas.toDataURL('image/jpeg', 0.85);
+                    // Use temp canvas for PDF (original untouched!)
+                    const imageData = tempCanvas.toDataURL('image/jpeg', 0.85);
                     const imageBytes = await fetch(imageData).then(res => res.arrayBuffer());
                     const image = await newPdf.embedJpg(imageBytes);
                     const page = newPdf.addPage([image.width, image.height]);
