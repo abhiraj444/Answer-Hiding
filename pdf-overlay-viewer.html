@@ -564,6 +564,8 @@
 
             // Render PDF page
             await page.render({ canvasContext: ctx, viewport }).promise;
+            canvas.style.pointerEvents = 'none';
+
             container.appendChild(canvas);
 
             // Get text content and find answers
@@ -587,6 +589,7 @@
                     item
                 });
             }
+            const foundPositions = [];
 
             // Find answer patterns
             const answerPatterns = [
@@ -627,22 +630,29 @@
                         const wPercent = ((maxX - minX) * scale / viewport.width) * 100;
                         const hPercent = ((maxY - minY) * scale / viewport.height) * 100;
 
-                        createOverlay(container, {
-                            xPercent, yPercent, wPercent, hPercent,
-                            pdfX: minX,
-                            pdfY: minY,
-                            pdfW: maxX - minX,
-                            pdfH: maxY - minY,
-                            pageNum
-                        });
+                        const isDuplicate = foundPositions.some(pos =>
+                            Math.abs(pos.x - minX) < 5 &&
+                            Math.abs(pos.y - minY) < 5
+                        );
+                        if (!isDuplicate) {
+                            foundPositions.push({ x: minX, y: minY });
 
-                        answerPositions.push({
-                            pageNum,
-                            x: minX,
-                            y: minY,
-                            width: maxX - minX,
-                            height: maxY - minY
-                        });
+                            createOverlay(container, {
+                                xPercent, yPercent, wPercent, hPercent,
+                                pdfX: minX,
+                                pdfY: minY,
+                                pdfW: maxX - minX,
+                                pdfH: maxY - minY,
+                                pageNum
+                            });
+                            answerPositions.push({
+                                pageNum,
+                                x: minX,
+                                y: minY,
+                                width: maxX - minX,
+                                height: maxY - minY
+                            });
+                        }
                     }
                 }
             }
@@ -694,7 +704,7 @@
                     revealedSet.add(String(idx));
                 } else {
                     overlay.classList.remove('revealed');
-                    overlay.textContent = '';
+                    overlay.textContent = '🔒';
                     revealedSet.delete(String(idx));
                 }
             });
