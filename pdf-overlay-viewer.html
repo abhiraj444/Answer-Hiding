@@ -411,6 +411,8 @@
         let answerPositions = [];
         let revealedSet = new Set();
         let processedPages = new Set();
+        let originalFileName = 'gaganpratap';
+
 
         // DOM elements
         const uploadZone = document.getElementById('uploadZone');
@@ -456,6 +458,8 @@
 
         // Load PDF - shows pages INSTANTLY with progressive loading
         async function loadPDF(file) {
+            originalFileName = file.name.replace(/\.pdf$/i, '');
+
             loadingOverlay.classList.remove('hidden');
             loadingText.textContent = 'Loading PDF...';
 
@@ -732,7 +736,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'gaganpratap_answers_hidden.pdf';
+                a.download = `${originalFileName}_answerHidden.pdf`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);

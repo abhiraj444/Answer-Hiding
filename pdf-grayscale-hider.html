@@ -422,6 +422,7 @@
         let revealedSet = new Set();
         let processedPages = new Set();
         let pageColorData = {}; // Store color canvas data for re-processing
+        let originalFileName = 'testbook';
         let totalPagesToProcess = 0;
         let ocrCompletedPages = new Set();
         let isOcrEnabled = false;
@@ -473,6 +474,8 @@
 
         // Load PDF - INSTANT display with progressive background loading
         async function loadPDF(file) {
+            originalFileName = file.name.replace(/\.pdf$/i, '');
+
             loadingOverlay.classList.remove('hidden');
             loadingText.textContent = 'Loading PDF...';
 
@@ -1011,7 +1014,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'testbook_hidden.pdf';
+                a.download = `${originalFileName}_answerHidden.pdf`;
                 a.click();
                 URL.revokeObjectURL(url);
                 loadingOverlay.classList.add('hidden');
