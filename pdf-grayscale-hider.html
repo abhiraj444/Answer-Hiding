@@ -804,7 +804,11 @@
                                     yPercent: (chosenOptionY / height) * 100,
                                     wPercent: (chosenOptionWidth / width) * 100,
                                     hPercent: (chosenOptionHeight / height) * 100,
-                                    pageNum, isStatusText: true  // Mark as Status-related
+                                    pageNum, isStatusText: true,
+                                    pdfX: chosenOptionX / scale,
+                                    pdfY: (viewport.height - (chosenOptionY + chosenOptionHeight)) / scale,
+                                    pdfWidth: chosenOptionWidth / scale,
+                                    pdfHeight: chosenOptionHeight / scale // Mark as Status-related
                                 });
                             }
                         }
