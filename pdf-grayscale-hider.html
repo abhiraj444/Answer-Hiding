@@ -753,8 +753,26 @@
             // For image-based PDFs, use OCR (if Tesseract loaded)
             if (typeof Tesseract !== "undefined" && canvas) {
                 try {
-                    const result = await Tesseract.recognize(canvas, "eng", {
-                        logger: m => { if (m.status === "recognizing text") loadingText.textContent = `OCR Page ${pageNum}: ${Math.round(m.progress * 100)}%`; }
+                    // OPTIMIZATION: Crop canvas to right half only (where Chosen Option appears)
+                    const rightHalfCanvas = document.createElement('canvas');
+                    const halfWidth = Math.floor(canvas.width / 2);
+                    rightHalfCanvas.width = halfWidth;
+                    rightHalfCanvas.height = canvas.height;
+                    const rightHalfCtx = rightHalfCanvas.getContext('2d');
+                    // Copy right half of original canvas
+                    rightHalfCtx.drawImage(
+                        canvas,
+                        halfWidth, 0,              // Source: start from middle
+                        halfWidth, canvas.height,  // Source: right half dimensions
+                        0, 0,                       // Destination: top-left corner
+                        halfWidth, canvas.height   // Destination: full cropped canvas
+                    );
+                    console.log(`[Page ${pageNum}] OCR processing right half only (${halfWidth}x${canvas.height})`);
+                    const result = await Tesseract.recognize(rightHalfCanvas, "eng", {
+                        logger: m => { if (m.status === "recognizing text") loadingText.textContent = `OCR Page ${pageNum}: ${Math.round(m.progress * 100)}%`; },
+                        // SPEED OPTIMIZATIONS:
+                        tessedit_pageseg_mode: '6',  // Assume uniform block of text
+                        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz :' // Only letters and colon
                     });
                     // Find "Status" text in OCR results
                     for (const line of result.data.lines || []) {
@@ -769,7 +787,7 @@
                                 }
                             }
                             if (statusWord) {
-                                const boxX = statusWord.bbox.x0;
+                                const boxX = statusWord.bbox.x0 + halfWidth;  // Add offset for right half
                                 const boxY = statusWord.bbox.y0;
                                 const boxWidth = statusWord.bbox.x1 - statusWord.bbox.x0;
                                 const boxHeight = statusWord.bbox.y1 - statusWord.bbox.y0;
