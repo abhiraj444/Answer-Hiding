@@ -348,6 +348,11 @@
         <button class="btn btn-warning hidden" id="hideAllBtn">🙈 Hide</button>
         <button class="btn btn-download hidden" id="downloadBtn">📥 Download</button>
 
+        <label class="hidden" id="ocrToggle" style="display: flex; align-items: center; gap: 5px; font-size: 0.75rem; color: #b0b0b0; margin-left: 10px;">
+            <input type="checkbox" id="enableOcr" style="width: 14px; height: 14px; cursor: pointer;">
+            <span>Hide Chosen Option (OCR)</span>
+        </label>
+
         <div class="page-nav hidden" id="pageNav">
             <button class="btn btn-secondary" id="prevPage">◀</button>
             <span class="page-info">
@@ -465,6 +470,8 @@
                 showAllBtn.classList.remove('hidden');
                 hideAllBtn.classList.remove('hidden');
                 downloadBtn.classList.remove('hidden');
+                document.getElementById('ocrToggle').classList.remove('hidden');
+                document.getElementById('ocrToggle').style.display = 'flex';
                 pageNav.classList.remove('hidden');
                 statusBar.classList.remove('hidden');
                 totalPagesSpan.textContent = pdfDoc.numPages;
@@ -576,7 +583,12 @@
             container.appendChild(grayCanvas);
 
             // Also detect "Chosen Option:" text to hide
-            const chosenOptionSymbols = await detectChosenOptionText(page, viewport, pageNum, viewport.width, viewport.height, colorCanvas);
+            // Only run OCR if checkbox is enabled
+            const enableOcrCheckbox = document.getElementById('enableOcr');
+            let chosenOptionSymbols = [];
+            if (enableOcrCheckbox && enableOcrCheckbox.checked) {
+                chosenOptionSymbols = await detectChosenOptionText(page, viewport, pageNum, viewport.width, viewport.height, colorCanvas);
+            }
 
             // Create overlays with PERCENTAGE positioning
             symbols.forEach(sym => createOverlay(container, sym, viewport));
