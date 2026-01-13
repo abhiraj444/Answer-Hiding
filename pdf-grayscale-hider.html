@@ -371,25 +371,33 @@
                 <p>For Testbook ✓/✗ marked PDFs</p>
             </div>
             <input type="file" id="fileInput" accept=".pdf" hidden>
-        </div>
-
-        <div class="pdf-viewer" id="pdfViewer">
-            <div class="instructions">
-                <strong>Tip:</strong> PDF is converted to grayscale. Click boxes to reveal ✓/✗ marks.
+            <div style="text-align: center; margin-top: 1rem;">
+                <label
+                    style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #b0b0b0; cursor: pointer;">
+                    <input type="checkbox" id="uploadOcrCheckbox" style="width: 16px; height: 16px; cursor: pointer;">
+                    <span>🔍 Auto-detect Chosen Option (OCR)</span>
+                </label>
             </div>
-            <div id="pagesContainer"></div>
-        </div>
-    </div>
 
-    <div class="status-bar hidden" id="statusBar">
-        <div class="stat">
-            <span>Found:</span>
-            <span class="stat-value" id="symbolCount">0</span>
+            <div class="pdf-viewer" id="pdfViewer">
+                <div class="instructions">
+                    <strong>Tip:</strong> PDF is converted to grayscale. Click boxes to reveal ✓/✗ marks.
+                </div>
+                <div id="pagesContainer"></div>
+            </div>
         </div>
-        <div class="stat">
-            <span>Revealed:</span>
-            <span class="stat-value" id="revealedCount">0</span>
+
+        <div class="status-bar hidden" id="statusBar">
+            <div class="stat">
+                <span>Found:</span>
+                <span class="stat-value" id="symbolCount">0</span>
+            </div>
+            <div class="stat">
+                <span>Revealed:</span>
+                <span class="stat-value" id="revealedCount">0</span>
+            </div>
         </div>
+        <div class="stat" id="processingStatus" style="color: #10b981; font-weight: 600;"></div>
     </div>
 
     <div class="loading-overlay hidden" id="loadingOverlay">
@@ -412,7 +420,9 @@
         let revealedSet = new Set();
         let processedPages = new Set();
         let pageColorData = {}; // Store color canvas data for re-processing
-
+        let totalPagesToProcess = 0;
+        let ocrCompletedPages = new Set();
+        let isOcrEnabled = false;
         // Detection settings - adjusted for various PDF symbol sizes
         const greenThreshold = 40;  // Lower threshold for better green detection
         const redThreshold = 40;    // Lower threshold for better red detection
@@ -476,6 +486,11 @@
                 downloadBtn.classList.remove('hidden');
                 document.getElementById('ocrToggle').classList.remove('hidden');
                 document.getElementById('ocrToggle').style.display = 'flex';
+                // Auto-enable OCR if user checked it on upload screen
+                const uploadOcrCheckbox = document.getElementById('uploadOcrCheckbox');
+                if (uploadOcrCheckbox && uploadOcrCheckbox.checked) {
+                    document.getElementById('enableOcr').checked = true;
+                }
                 pageNav.classList.remove('hidden');
                 statusBar.classList.remove('hidden');
                 totalPagesSpan.textContent = pdfDoc.numPages;
@@ -487,6 +502,8 @@
                 revealedSet.clear();
                 processedPages.clear();
                 pageColorData = {};
+                ocrCompletedPages.clear();
+                totalPagesToProcess = pdfDoc.numPages;
 
                 // Create placeholder containers for ALL pages immediately
                 for (let i = 1; i <= pdfDoc.numPages; i++) {
@@ -537,6 +554,7 @@
                 if (!processedPages.has(i)) {
                     await processPage(i);
                     await new Promise(r => setTimeout(r, 10));
+                    checkIfProcessingComplete();
                 }
             }
         }
@@ -598,8 +616,39 @@
                         // Add Chosen Option boxes when OCR finishes
                         statusSymbols.forEach(sym => createOverlay(container, sym, viewport));
                         symbolCountSpan.textContent = overlays.length;
+                        ocrCompletedPages.add(pageNum);
+                        checkIfProcessingComplete();
                     })
                     .catch(err => console.error(`OCR failed for page ${pageNum}:`, err));
+            }
+        }
+        function checkIfProcessingComplete() {
+            const enableOcrCheckbox = document.getElementById('enableOcr');
+            const processingStatus = document.getElementById('processingStatus');
+
+            if (!processingStatus) return;
+
+            // Check if all pages processed
+            const allPagesProcessed = processedPages.size === pdfDoc.numPages;
+
+            // Check if OCR completed (if enabled)
+            const ocrComplete = !enableOcrCheckbox?.checked ||
+                ocrCompletedPages.size === pdfDoc.numPages;
+
+            if (allPagesProcessed && ocrComplete) {
+                processingStatus.textContent = '✅ PDF is ready to be downloaded';
+                processingStatus.style.fontSize = '0.85rem';
+                console.log('All processing complete!');
+            } else {
+                const pagesLeft = pdfDoc.numPages - processedPages.size;
+                const ocrLeft = enableOcrCheckbox?.checked ?
+                    (pdfDoc.numPages - ocrCompletedPages.size) : 0;
+
+                if (pagesLeft > 0) {
+                    processingStatus.textContent = `Processing pages... ${pagesLeft} remaining`;
+                } else if (ocrLeft > 0) {
+                    processingStatus.textContent = `OCR scanning... ${ocrLeft} pages remaining`;
+                }
             }
         }
 
