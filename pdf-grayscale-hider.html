@@ -393,6 +393,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -575,7 +576,7 @@
             container.appendChild(grayCanvas);
 
             // Also detect "Chosen Option:" text to hide
-            const chosenOptionSymbols = await detectChosenOptionText(page, viewport, pageNum, viewport.width, viewport.height);
+            const chosenOptionSymbols = await detectChosenOptionText(page, viewport, pageNum, viewport.width, viewport.height, colorCanvas);
 
             // Create overlays with PERCENTAGE positioning
             symbols.forEach(sym => createOverlay(container, sym, viewport));
@@ -689,85 +690,72 @@
         }
 
         // Detect "Chosen Option:" text and create overlays to hide the value
-        async function detectChosenOptionText(page, viewport, pageNum, width, height) {
-            const textContent = await page.getTextContent();
-            const items = textContent.items;
+        // Detect "Chosen Option:" text using OCR and create overlays
+        async function detectChosenOptionText(page, viewport, pageNum, width, height, canvas) {
             const chosenOptionOverlays = [];
 
-            for (let i = 0; i < items.length; i++) {
-                const item = items[i];
-                const str = item.str || '';
+            // First try PDF text layer (for text-based PDFs)
+            try {
+                const textContent = await page.getTextContent();
+                for (const item of textContent.items) {
+                    if (item.str && item.str.includes("Chosen Option")) {
+                        const colonIdx = item.str.indexOf(":");
+                        if (colonIdx !== -1) {
+                            const tx = item.transform;
 
-                // Check if this item contains "Chosen Option"
-                if (str.includes('Chosen Option')) {
-                    // The value might be in the same item after ":" or in the next item
-                    let valueItem = null;
-                    let valueStr = '';
+                            const textWidth = item.width * scale;  // real width of "Chosen Option :"
+                            const boxWidth = 22;
+                            const boxHeight = 22;
 
-                    // Check if value is in the same string (e.g., "Chosen Option : 3")
-                    const colonIndex = str.indexOf(':');
-                    if (colonIndex !== -1) {
-                        valueStr = str.substring(colonIndex + 1).trim();
-                    }
-
-                    // If no value found in same item, check next item
-                    if (!valueStr && i + 1 < items.length) {
-                        valueItem = items[i + 1];
-                        valueStr = (valueItem.str || '').trim();
-                    }
-
-                    // If we found a value (number or "--"), create overlay
-                    if (valueStr && (valueStr.match(/^\d+$/) || valueStr === '--' || valueStr === '-')) {
-                        // Get position of the value
-                        let transform;
-                        if (valueItem) {
-                            transform = valueItem.transform;
-                        } else {
-                            transform = item.transform;
-                        }
-
-                        if (transform) {
-                            // PDF coordinate system: transform[4] = x, transform[5] = y
-                            const pdfX = transform[4];
-                            const pdfY = transform[5];
-
-                            // Convert to canvas coordinates (scale and flip Y)
-                            let canvasX, canvasY;
-                            if (valueItem) {
-                                canvasX = pdfX * scale;
-                                canvasY = viewport.height - (pdfY * scale);
-                            } else {
-                                // Value is after colon in same item, estimate position
-                                const itemWidth = item.width * scale || 100;
-                                canvasX = (pdfX * scale) + itemWidth * 0.7;  // Estimate position after "Chosen Option :"
-                                canvasY = viewport.height - (pdfY * scale);
-                            }
-
-                            // Create overlay for the value
-                            const boxWidth = 40;  // Wide enough to cover "3" or "--"
-                            const boxHeight = 20;
-                            const boxX = canvasX - 5;
-                            const boxY = canvasY - boxHeight + 5;
+                            const boxX = (tx[4] * scale) + textWidth + 2;
+                            const boxY = viewport.height - (tx[5] * scale) - boxHeight + 5;
 
                             chosenOptionOverlays.push({
-                                x: boxX,
-                                y: boxY,
-                                width: boxWidth,
-                                height: boxHeight,
+                                x: boxX, y: boxY, width: boxWidth, height: boxHeight,
                                 xPercent: (boxX / width) * 100,
                                 yPercent: (boxY / height) * 100,
                                 wPercent: (boxWidth / width) * 100,
                                 hPercent: (boxHeight / height) * 100,
-                                pageNum: pageNum,
-                                pdfX: boxX / scale,
-                                pdfY: (viewport.height - (boxY + boxHeight)) / scale,
-                                pdfWidth: boxWidth / scale,
-                                pdfHeight: boxHeight / scale,
-                                isChosenOption: true
+                                pageNum, isChosenOption: true
                             });
                         }
                     }
                 }
+                if (chosenOptionOverlays.length > 0) return chosenOptionOverlays;
+            } catch (e) { console.log("Text layer not available, using OCR"); }
+
+            // For image-based PDFs, use OCR (if Tesseract loaded)
+            if (typeof Tesseract !== "undefined" && canvas) {
+                try {
+                    const result = await Tesseract.recognize(canvas, "eng", {
+                        logger: m => { if (m.status === "recognizing text") loadingText.textContent = `OCR Page ${pageNum}: ${Math.round(m.progress * 100)}%`; }
+                    });
+
+                    // Find "Chosen Option" text in OCR results
+                    for (const line of result.data.lines || []) {
+                        if (line.text.toLowerCase().includes("chosen option")) {
+                            // Find the value after colon
+                            const match = line.text.match(/chosen\s*option\s*:\s*(\d+|--|-)/i);
+                            if (match) {
+                                // Get bounding box from OCR
+                                const bbox = line.bbox;
+                                const boxWidth = 50;  // Fixed width
+                                const boxHeight = 25;  // Fixed height
+                                const boxX = bbox.x1 - boxWidth - 5;  // Position at end of line
+                                const boxY = bbox.y0 - 2;
+
+                                chosenOptionOverlays.push({
+                                    x: boxX, y: boxY, width: boxWidth, height: boxHeight,
+                                    xPercent: (boxX / width) * 100,
+                                    yPercent: (boxY / height) * 100,
+                                    wPercent: (boxWidth / width) * 100,
+                                    hPercent: (boxHeight / height) * 100,
+                                    pageNum, isChosenOption: true
+                                });
+                            }
+                        }
+                    }
+                } catch (e) { console.error("OCR error:", e); }
             }
 
             return chosenOptionOverlays;
