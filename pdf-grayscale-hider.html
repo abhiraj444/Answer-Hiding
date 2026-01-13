@@ -214,6 +214,20 @@
             border-color: #22c55e;
         }
 
+        .symbol-overlay .lock-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .symbol-overlay.revealed .lock-icon {
+            display: none;
+        }
+
         .instructions {
             background: rgba(16, 185, 129, 0.1);
             border: 1px solid rgba(16, 185, 129, 0.3);
@@ -392,11 +406,11 @@
         let processedPages = new Set();
         let pageColorData = {}; // Store color canvas data for re-processing
 
-        // Detection settings
-        const greenThreshold = 60;
-        const redThreshold = 60;
-        const minSymbolSize = 8;
-        const maxSymbolSize = 25;
+        // Detection settings - adjusted for various PDF symbol sizes
+        const greenThreshold = 40;  // Lower threshold for better green detection
+        const redThreshold = 40;    // Lower threshold for better red detection
+        const minSymbolSize = 6;    // Minimum symbol dimension in pixels
+        const maxSymbolSize = 60;   // Maximum symbol dimension in pixels (increased for larger marks)
 
         // DOM
         const uploadZone = document.getElementById('uploadZone');
@@ -560,8 +574,14 @@
             grayCtx.putImageData(imageData, 0, 0);
             container.appendChild(grayCanvas);
 
+            // Also detect "Chosen Option:" text to hide
+            const chosenOptionSymbols = await detectChosenOptionText(page, viewport, pageNum, viewport.width, viewport.height);
+
             // Create overlays with PERCENTAGE positioning
             symbols.forEach(sym => createOverlay(container, sym, viewport));
+
+            // Create overlays for Chosen Option values
+            chosenOptionSymbols.forEach(sym => createOverlay(container, sym, viewport));
 
             symbolCountSpan.textContent = overlays.length;
         }
@@ -596,13 +616,20 @@
                     symbols.push({
                         centerX: (blob.minX + blob.maxX) / 2,
                         centerY: (blob.minY + blob.maxY) / 2,
+                        // Store actual blob dimensions for dynamic box sizing
+                        blobWidth: blobWidth,
+                        blobHeight: blobHeight,
+                        minX: blob.minX,
+                        maxX: blob.maxX,
+                        minY: blob.minY,
+                        maxY: blob.maxY,
                         pageNum
                     });
                 }
             });
 
-            // One per row
-            const rowTolerance = 15;
+            // One per row - increased tolerance for larger symbols
+            const rowTolerance = 25;
             const rows = [];
             symbols.forEach(sym => {
                 let foundRow = rows.find(row => Math.abs(row.y - sym.centerY) < rowTolerance);
@@ -616,35 +643,134 @@
                 filteredSymbols.push(row.symbols[0]);
             });
 
-            // Uniform box size
-            const boxHeight = 24;
-            const boxWidth = 32;
+            // Sort by Y position for vertical grouping
+            filteredSymbols.sort((a, b) => a.centerY - b.centerY);
 
-            // Align all boxes to same X
-            let minX = Infinity;
+            // Group symbols that are vertically close (same question options)
+            const questionGroups = [];
+            const groupYGap = 80;  // Max gap between consecutive options
+
             filteredSymbols.forEach(sym => {
-                const boxLeft = sym.centerX - 12;
-                if (boxLeft < minX) minX = boxLeft;
+                if (questionGroups.length === 0) {
+                    questionGroups.push([sym]);
+                } else {
+                    const lastGroup = questionGroups[questionGroups.length - 1];
+                    const lastSym = lastGroup[lastGroup.length - 1];
+                    // Max 4 options per group, and must be close vertically
+                    if (lastGroup.length < 4 && sym.centerY - lastSym.centerY < groupYGap && Math.abs(sym.minX - lastSym.minX) < 40) {
+                        lastGroup.push(sym);
+                    } else {
+                        questionGroups.push([sym]);
+                    }
+                }
             });
 
-            return filteredSymbols.map(sym => ({
-                // Pixel positions for PDF download
-                x: minX,
-                y: sym.centerY - boxHeight / 2,
-                width: boxWidth,
-                height: boxHeight,
-                // PERCENTAGE positions for responsive display
-                xPercent: (minX / width) * 100,
-                yPercent: ((sym.centerY - boxHeight / 2) / height) * 100,
-                wPercent: (boxWidth / width) * 100,
-                hPercent: (boxHeight / height) * 100,
-                pageNum: sym.pageNum,
-                // PDF coordinates
-                pdfX: minX / scale,
-                pdfY: (viewport.height - (sym.centerY + boxHeight / 2)) / scale,
-                pdfWidth: boxWidth / scale,
-                pdfHeight: boxHeight / scale
-            }));
+            const boxWidth = 32;
+            return questionGroups.map(group => {
+                const topSym = group[0];
+                const bottomSym = group[group.length - 1];
+                const boxX = Math.min(...group.map(s => s.minX)) - 2;
+                const boxY = topSym.centerY - 14;
+                const boxHeight = Math.max(28, (bottomSym.centerY - topSym.centerY) + 28);
+                return {
+                    x: boxX, y: boxY, width: boxWidth, height: boxHeight,
+                    xPercent: (boxX / width) * 100,
+                    yPercent: (boxY / height) * 100,
+                    wPercent: (boxWidth / width) * 100,
+                    hPercent: (boxHeight / height) * 100,
+                    pageNum: pageNum,
+                    pdfX: boxX / scale,
+                    pdfY: (viewport.height - (boxY + boxHeight)) / scale,
+                    pdfWidth: boxWidth / scale,
+                    pdfHeight: boxHeight / scale,
+                    isGroupBox: group.length > 1
+                };
+            });
+        }
+
+        // Detect "Chosen Option:" text and create overlays to hide the value
+        async function detectChosenOptionText(page, viewport, pageNum, width, height) {
+            const textContent = await page.getTextContent();
+            const items = textContent.items;
+            const chosenOptionOverlays = [];
+
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const str = item.str || '';
+
+                // Check if this item contains "Chosen Option"
+                if (str.includes('Chosen Option')) {
+                    // The value might be in the same item after ":" or in the next item
+                    let valueItem = null;
+                    let valueStr = '';
+
+                    // Check if value is in the same string (e.g., "Chosen Option : 3")
+                    const colonIndex = str.indexOf(':');
+                    if (colonIndex !== -1) {
+                        valueStr = str.substring(colonIndex + 1).trim();
+                    }
+
+                    // If no value found in same item, check next item
+                    if (!valueStr && i + 1 < items.length) {
+                        valueItem = items[i + 1];
+                        valueStr = (valueItem.str || '').trim();
+                    }
+
+                    // If we found a value (number or "--"), create overlay
+                    if (valueStr && (valueStr.match(/^\d+$/) || valueStr === '--' || valueStr === '-')) {
+                        // Get position of the value
+                        let transform;
+                        if (valueItem) {
+                            transform = valueItem.transform;
+                        } else {
+                            transform = item.transform;
+                        }
+
+                        if (transform) {
+                            // PDF coordinate system: transform[4] = x, transform[5] = y
+                            const pdfX = transform[4];
+                            const pdfY = transform[5];
+
+                            // Convert to canvas coordinates (scale and flip Y)
+                            let canvasX, canvasY;
+                            if (valueItem) {
+                                canvasX = pdfX * scale;
+                                canvasY = viewport.height - (pdfY * scale);
+                            } else {
+                                // Value is after colon in same item, estimate position
+                                const itemWidth = item.width * scale || 100;
+                                canvasX = (pdfX * scale) + itemWidth * 0.7;  // Estimate position after "Chosen Option :"
+                                canvasY = viewport.height - (pdfY * scale);
+                            }
+
+                            // Create overlay for the value
+                            const boxWidth = 40;  // Wide enough to cover "3" or "--"
+                            const boxHeight = 20;
+                            const boxX = canvasX - 5;
+                            const boxY = canvasY - boxHeight + 5;
+
+                            chosenOptionOverlays.push({
+                                x: boxX,
+                                y: boxY,
+                                width: boxWidth,
+                                height: boxHeight,
+                                xPercent: (boxX / width) * 100,
+                                yPercent: (boxY / height) * 100,
+                                wPercent: (boxWidth / width) * 100,
+                                hPercent: (boxHeight / height) * 100,
+                                pageNum: pageNum,
+                                pdfX: boxX / scale,
+                                pdfY: (viewport.height - (boxY + boxHeight)) / scale,
+                                pdfWidth: boxWidth / scale,
+                                pdfHeight: boxHeight / scale,
+                                isChosenOption: true
+                            });
+                        }
+                    }
+                }
+            }
+
+            return chosenOptionOverlays;
         }
 
         function findBlobs(mask, width, height) {
@@ -685,6 +811,14 @@
             overlay.style.top = symbol.yPercent + '%';
             overlay.style.width = symbol.wPercent + '%';
             overlay.style.height = symbol.hPercent + '%';
+
+            // Add lock icon for group boxes
+            if (symbol.isGroupBox) {
+                const lockIcon = document.createElement('span');
+                lockIcon.className = 'lock-icon';
+                lockIcon.textContent = '🔒';
+                overlay.appendChild(lockIcon);
+            }
 
             overlay.dataset.index = overlays.length;
             overlay.addEventListener('click', e => { e.stopPropagation(); toggleOverlay(overlay); });
