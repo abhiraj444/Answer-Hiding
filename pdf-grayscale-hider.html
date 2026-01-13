@@ -378,27 +378,29 @@
                     <span>🔍 Auto-detect Chosen Option (OCR)</span>
                 </label>
             </div>
-
-            <div class="pdf-viewer" id="pdfViewer">
-                <div class="instructions">
-                    <strong>Tip:</strong> PDF is converted to grayscale. Click boxes to reveal ✓/✗ marks.
-                </div>
-                <div id="pagesContainer"></div>
-            </div>
         </div>
 
-        <div class="status-bar hidden" id="statusBar">
-            <div class="stat">
-                <span>Found:</span>
-                <span class="stat-value" id="symbolCount">0</span>
+        <div class="pdf-viewer" id="pdfViewer">
+            <div class="instructions">
+                <strong>Tip:</strong> PDF is converted to grayscale. Click boxes to reveal ✓/✗ marks.
             </div>
-            <div class="stat">
-                <span>Revealed:</span>
-                <span class="stat-value" id="revealedCount">0</span>
-            </div>
+            <div id="pagesContainer"></div>
+        </div>
+    </div>
+
+    <div class="status-bar hidden" id="statusBar">
+        <div class="stat">
+            <span>Found:</span>
+            <span class="stat-value" id="symbolCount">0</span>
+        </div>
+        <div class="stat">
+            <span>Revealed:</span>
+            <span class="stat-value" id="revealedCount">0</span>
         </div>
         <div class="stat" id="processingStatus" style="color: #10b981; font-weight: 600;"></div>
+
     </div>
+
 
     <div class="loading-overlay hidden" id="loadingOverlay">
         <div class="spinner"></div>
